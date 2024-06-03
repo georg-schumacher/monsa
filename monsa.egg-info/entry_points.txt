@@ -1,0 +1,3 @@
+[console_scripts]
+monsa = monsa.monsa:main
+

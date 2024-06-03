@@ -1,0 +1,12 @@
+setup.py
+monsa/__init__.py
+monsa/monsa.py
+monsa.egg-info/PKG-INFO
+monsa.egg-info/SOURCES.txt
+monsa.egg-info/dependency_links.txt
+monsa.egg-info/entry_points.txt
+monsa.egg-info/top_level.txt
+monsa/local/__init__.py
+monsa/local/file_collector.py
+monsa/otr/OtrCollector.py
+monsa/otr/__init__.py

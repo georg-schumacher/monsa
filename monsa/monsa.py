@@ -1,3 +1,6 @@
+
+from time import sleep
+from os.path import basename, dirname
 from typing import List, Tuple, Dict
 from os.path import dirname, basename
 import sys
@@ -35,9 +38,63 @@ from bs4 import BeautifulSoup
 current_dir = dirname(abspath(__file__))
 parent_dir = dirname(current_dir)
 sys.path.insert(0, parent_dir)
-from monsa.local.file_collector import FileCollector
 ##################################
 ##################################
+
+
+ALLOWED_EXTENSIONS = [".mp4", ".mkv", ".avi", ".ts"]
+IGNORED_FOLDERS = [
+    ".actors",
+    ".deletedByTMM",
+    "$RECYCLE.BIN",
+]
+
+
+class FileCollector(QThread):
+    progress = pyqtSignal(int)
+    file_list_collected_signal = pyqtSignal(list)
+
+    def __init__(
+        self,
+        # persistency_file="C:\\ws\\py\\jsoup\\local_file_list_cached.pkl",
+        persistency_file="/home/sg82fe/.local_file_list_cached.pkl",
+
+    ):
+        super().__init__()
+        self.persistency_file = persistency_file
+        if os.path.exists(self.persistency_file):
+            with open(self.persistency_file, "rb") as f:
+                self.file_list_cached = pickle.load(f)
+        else:
+            self.file_list_cached = []
+        self.total_files = max(10, len(self.file_list_cached))
+
+    def set_dir(self, directories: str):
+        self.directories = directories
+
+    def run(self):
+        file_list = []
+        current_files = 0
+        for directory in self.directories.split(";"):
+            for root, dirs, files in os.walk(directory):
+                dirs[:] = [d for d in dirs if d not in IGNORED_FOLDERS]
+                for file in files:
+                    if any(file.endswith(ext) for ext in ALLOWED_EXTENSIONS):
+                        full_file_path = os.path.join(root, file)
+                        size_b = os.path.getsize(full_file_path)
+                        size_gb = size_b / (1024*1024*1024)
+                        entry = (size_gb, file, root)
+                        file_list.append(entry)
+                        current_files += 1
+                        self.progress.emit(
+                            int(current_files / self.total_files * 100))
+
+        self.file_list_collected_signal.emit(file_list)
+
+        # Save the converted file list
+        with open(self.persistency_file, "wb") as f:
+            pickle.dump(file_list, f)
+
 
 class OtrCollector(QThread):
     progress = pyqtSignal(int)
@@ -59,9 +116,11 @@ class OtrCollector(QThread):
         self.airdate = airdate or "2024-05-27"
 
     def run(self):
-        print("run otr")
+        otrkey_list = self.get_otrkey_list()
+        self.otrkey_list_collected_signal.emit(otrkey_list)
+
+    def get_otrkey_list(self):
         otrkey_list = []
-        current_otrkeys = 0
         for s in self.stations:
             url = f"https://otrkeyfinder.com/de/?search=station%3A{s}+-HD.ac3+--mpg.avi+-mpg.mp4"
             response = requests.get(url)
@@ -71,8 +130,6 @@ class OtrCollector(QThread):
                 found_url = result['href']
                 print(found_url)
                 otrkey_list.append(found_url)
-
-        self.otrkey_list_collected_signal.emit(otrkey_list)
 
 
 class MainWindow(QMainWindow):
@@ -107,7 +164,8 @@ class MainWindow(QMainWindow):
         button_local = QPushButton("Scan/Update local")
         button_local.clicked.connect(self.scan_local)
         self.local_dir_txtedit = QLineEdit()
-        self.local_dir_txtedit.setText("T:\\video\\;C:\\Downloads\\")
+        # self.local_dir_txtedit.setText("T:\\video\\;C:\\Downloads\\")
+        self.local_dir_txtedit.setText("/home/sg82fe/Videos/Screencasts")
 
         self.local_model = QStandardItemModel(0, 3)
         self.local_model.setHorizontalHeaderLabels(["Gb", "File", "Path"])
@@ -166,18 +224,19 @@ class MainWindow(QMainWindow):
             self.all_local_movies = self.fc.file_list_cached
             self.update_local_model(self.fc.file_list_cached)
         self.fc.file_list_collected_signal.connect(self.init_all_local_movies)
-        self.fc.progress.connect(lambda value: self.progress_bar.setValue(value))
+        self.fc.progress.connect(
+            lambda value: self.progress_bar.setValue(value))
 
         self.oc = OtrCollector()
         self.oc.otrkey_list_collected_signal.connect(self.update_otrkeys)
-
         button_otrkey.clicked.connect(self.scan_otrkey)
-        
-        
+
     def scan_otrkey(self):
         self.oc.set_search_args()
-        self.oc.start()
-        
+        # self.oc.start()
+        otrkey_list = self.oc.get_otrkey_list()
+        self.update_otrkeys(otrkey_list)
+
     def update_otrkeys(self, otrkey_list):
         self.otrkey_model.setStringList(otrkey_list)
 

@@ -18,7 +18,9 @@ class FileCollector(QThread):
 
     def __init__(
         self,
-        persistency_file="C:\\ws\\py\\jsoup\\local_file_list_cached.pkl",
+        # persistency_file="C:\\ws\\py\\jsoup\\local_file_list_cached.pkl",
+        persistency_file="/home/sg82fe/.local_file_list_cached.pkl",
+
     ):
         super().__init__()
         self.persistency_file = persistency_file
